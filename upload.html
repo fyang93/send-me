@@ -1,0 +1,907 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="color-scheme" content="light dark">
+<title>Send me files</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%236d5efc'/><stop offset='1' stop-color='%232fb8ff'/></linearGradient></defs><rect width='32' height='32' rx='9' fill='url(%23g)'/><path d='M8 16.5 24 9l-4.5 15-4-5.5L8 16.5Z' fill='white'/></svg>">
+<style>
+:root {
+  --bg: #f3f4fb;
+  --fg: #151829;
+  --muted: #6b7190;
+  --card: rgba(255, 255, 255, .68);
+  --card-solid: #ffffff;
+  --line: rgba(21, 24, 41, .09);
+  --track: rgba(21, 24, 41, .07);
+  --a1: #6d5efc;
+  --a2: #2fb8ff;
+  --a3: #ff5fa2;
+  --ok: #12b76a;
+  --err: #e5484d;
+  --shadow: 0 30px 80px -30px rgba(60, 50, 140, .35), 0 2px 6px rgba(21, 24, 41, .04);
+  --blob-op: .55;
+  --ease: cubic-bezier(.22, .8, .24, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #090b14;
+    --fg: #eceef8;
+    --muted: #9298b3;
+    --card: rgba(20, 23, 38, .62);
+    --card-solid: #151827;
+    --line: rgba(255, 255, 255, .08);
+    --track: rgba(255, 255, 255, .07);
+    --shadow: 0 30px 80px -30px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .03);
+    --blob-op: .35;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+button { font: inherit; color: inherit; }
+
+/* ---------- animated background ---------- */
+.bg { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+.bg i {
+  position: absolute; width: 55vmax; height: 55vmax; border-radius: 50%;
+  filter: blur(90px); opacity: var(--blob-op); will-change: transform;
+  animation: drift 22s ease-in-out infinite alternate;
+}
+.bg i:nth-child(1) { background: var(--a1); top: -20vmax; left: -15vmax; }
+.bg i:nth-child(2) { background: var(--a2); bottom: -25vmax; right: -20vmax; animation-duration: 26s; animation-delay: -8s; }
+.bg i:nth-child(3) { background: var(--a3); top: 30%; left: 40%; width: 35vmax; height: 35vmax; opacity: calc(var(--blob-op) * .6); animation-duration: 30s; animation-delay: -15s; }
+.bg::after {
+  content: ""; position: absolute; inset: 0;
+  background-image: radial-gradient(rgba(127,127,160,.18) 1px, transparent 1px);
+  background-size: 22px 22px;
+  mask-image: radial-gradient(ellipse at center, #000 30%, transparent 75%);
+}
+@keyframes drift {
+  0%   { transform: translate(0, 0) scale(1) rotate(0deg); }
+  50%  { transform: translate(8vmax, 6vmax) scale(1.15) rotate(40deg); }
+  100% { transform: translate(-6vmax, 10vmax) scale(.9) rotate(-30deg); }
+}
+
+/* ---------- layout ---------- */
+main { max-width: 540px; margin: 0 auto; padding: max(40px, env(safe-area-inset-top)) 16px 48px; }
+.card {
+  background: var(--card);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  padding: 28px 24px 24px;
+  animation: rise .7s cubic-bezier(.2, .9, .25, 1.1) backwards;
+}
+@keyframes rise { from { opacity: 0; transform: translateY(24px) scale(.98); } }
+
+header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+.logo {
+  width: 48px; height: 48px; flex: none; border-radius: 15px;
+  background: linear-gradient(135deg, var(--a1), var(--a2));
+  display: grid; place-items: center;
+  box-shadow: 0 10px 24px -8px var(--a1);
+  animation: bob 4s ease-in-out infinite;
+}
+.logo svg { width: 24px; height: 24px; transform: translate(-1px, 1px); }
+@keyframes bob { 50% { transform: translateY(-4px) rotate(-4deg); } }
+h1 { font-size: 21px; line-height: 1.25; margin: 0; letter-spacing: -.01em; }
+.sub { margin: 2px 0 0; color: var(--muted); font-size: 13px; }
+
+/* ---------- drop zone ---------- */
+.drop {
+  position: relative; display: block; cursor: pointer; text-align: center;
+  padding: 34px 16px 30px; border-radius: 18px;
+  border: 1.5px dashed color-mix(in srgb, var(--muted) 45%, transparent);
+  background: color-mix(in srgb, var(--card-solid) 55%, transparent);
+  transition: border-color .5s var(--ease), background .5s var(--ease), transform .5s var(--ease), padding .4s var(--ease), opacity .3s;
+  outline: none;
+}
+.drop input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.drop:hover, .drop:focus-visible { border-color: color-mix(in srgb, var(--a1) 55%, transparent); background: color-mix(in srgb, var(--a1) 5%, var(--card-solid)); }
+.drop.over { border-style: solid; border-color: var(--a1); background: color-mix(in srgb, var(--a1) 9%, var(--card-solid)); transform: scale(1.012); }
+.drop.compact { padding: 16px; }
+.drop.compact .drop-icon { width: 38px; height: 38px; margin-bottom: 6px; }
+.drop.compact .drop-sub { display: none; }
+.drop.disabled { pointer-events: none; opacity: .45; }
+.drop-icon {
+  width: 56px; height: 56px; margin: 0 auto 12px; border-radius: 16px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--a1) 16%, transparent), color-mix(in srgb, var(--a2) 16%, transparent));
+  color: var(--a1);
+}
+.drop-icon svg { width: 55%; height: 55%; }
+.drop-icon { transition: transform .6s var(--ease), width .4s var(--ease), height .4s var(--ease), margin .4s var(--ease); }
+.drop:hover .drop-icon, .drop.over .drop-icon { transform: translateY(-3px); }
+.drop.over .drop-icon .arrow { animation: lift .9s ease-in-out infinite; }
+@keyframes lift { 0%, 100% { transform: translateY(1.5px); } 50% { transform: translateY(-2px); } }
+.drop-title { font-weight: 600; }
+.drop-title u { text-decoration: none; background: linear-gradient(90deg, var(--a1), var(--a2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.drop-sub { color: var(--muted); font-size: 13px; margin-top: 2px; }
+
+/* ---------- file list ---------- */
+ul { list-style: none; padding: 0; margin: 14px 0 0; }
+.item {
+  position: relative; display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px;
+  padding: 11px 12px; margin-bottom: 8px; border-radius: 14px;
+  background: color-mix(in srgb, var(--card-solid) 70%, transparent);
+  border: 1px solid var(--line);
+  animation: pop-in .45s cubic-bezier(.2, .9, .3, 1.25) backwards;
+  overflow: hidden;
+}
+@keyframes pop-in { from { opacity: 0; transform: translateY(10px) scale(.96); } }
+.item.leaving { animation: pop-out .3s ease forwards; }
+@keyframes pop-out { to { opacity: 0; transform: translateX(30px); margin-bottom: -60px; } }
+.badge {
+  width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+  font-size: 10.5px; font-weight: 700; letter-spacing: .02em; color: #fff;
+  background: linear-gradient(135deg, hsl(var(--h) 80% 62%), hsl(calc(var(--h) + 40) 80% 52%));
+  text-transform: uppercase; overflow: hidden; transition: transform .4s cubic-bezier(.2, .9, .3, 1.5);
+}
+.info { min-width: 0; }
+.name { font-size: 14px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.meta { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 1px; }
+.bar { height: 4px; border-radius: 4px; background: var(--track); margin-top: 7px; overflow: hidden; }
+.bar i {
+  position: relative; display: block; height: 100%; width: 0; border-radius: inherit;
+  background: linear-gradient(90deg, var(--a1), var(--a2));
+  transition: width .25s ease-out;
+}
+.item.active .bar i::after {
+  content: ""; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.65), transparent);
+  animation: shimmer 1.3s linear infinite;
+}
+@keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.item.done .bar i { background: var(--ok); }
+.item.done .badge { transform: scale(.9); }
+.item.active { border-color: color-mix(in srgb, var(--a1) 35%, transparent); }
+
+.x {
+  width: 30px; height: 30px; border-radius: 9px; border: 0; background: transparent; cursor: pointer;
+  color: var(--muted); display: grid; place-items: center; transition: background .2s, color .2s, transform .2s;
+}
+.x:hover { background: color-mix(in srgb, var(--err) 12%, transparent); color: var(--err); transform: rotate(90deg); }
+.x svg { width: 16px; height: 16px; }
+.tick { width: 30px; height: 30px; display: none; place-items: center; color: var(--ok); }
+.tick svg { width: 22px; height: 22px; }
+.tick path { stroke-dasharray: 24; stroke-dashoffset: 24; }
+.item.done .tick { display: grid; }
+.item.done .tick path { animation: draw .45s .05s ease-out forwards; }
+.item.done .x, .locked .x { display: none; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+
+/* ---------- overall progress ---------- */
+.overall {
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 18px;
+  margin-top: 16px; padding: 16px; border-radius: 18px;
+  background: color-mix(in srgb, var(--card-solid) 60%, transparent);
+  border: 1px solid var(--line);
+  animation: pop-in .5s cubic-bezier(.2, .9, .3, 1.2) backwards;
+}
+.overall[hidden] { display: none; }
+.ring { position: relative; width: 84px; height: 84px; }
+.ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ring circle { fill: none; stroke-width: 7; }
+.ring .track { stroke: var(--track); }
+.ring .val { stroke: url(#ringGrad); stroke-linecap: round; stroke-dasharray: 226.2; stroke-dashoffset: 226.2; transition: stroke-dashoffset .3s ease-out; }
+.ring.paused .val { stroke: var(--muted); }
+.ring .pct { position: absolute; inset: 0; display: grid; place-items: center; font-weight: 700; font-size: 17px; font-variant-numeric: tabular-nums; }
+.ring::before {
+  content: ""; position: absolute; inset: -6px; border-radius: 50%; z-index: -1;
+  background: conic-gradient(transparent 65%, color-mix(in srgb, var(--a2) 55%, transparent));
+  filter: blur(6px); opacity: 0; transition: opacity .6s var(--ease);
+}
+.ring.running::before { opacity: 1; animation: rot 1.8s linear infinite; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 13px; }
+.stats div { min-width: 0; }
+.stats b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stats span { color: var(--muted); font-size: 12px; }
+
+/* ---------- buttons ---------- */
+.actions { display: flex; gap: 10px; margin-top: 16px; }
+.btn {
+  position: relative; flex: 1; height: 48px; border-radius: 14px; border: 0; cursor: pointer;
+  font-weight: 600; font-size: 15px; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: transform .2s var(--ease), box-shadow .5s var(--ease), opacity .25s, background .4s var(--ease); overflow: hidden;
+}
+.btn:active { transform: scale(.97); }
+.btn[hidden] { display: none; }
+.btn.primary {
+  color: #fff;
+  background: linear-gradient(110deg, var(--a1), color-mix(in srgb, var(--a1) 45%, var(--a2)) 55%, var(--a2));
+  box-shadow: 0 12px 28px -12px var(--a1);
+}
+.btn.primary:disabled { opacity: .45; cursor: default; box-shadow: none; }
+.btn.ghost { flex: 0 0 auto; padding: 0 20px; background: color-mix(in srgb, var(--fg) 7%, transparent); }
+.btn.ghost:hover { background: color-mix(in srgb, var(--err) 14%, transparent); color: var(--err); }
+.btn svg { width: 18px; height: 18px; }
+.spinner { width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,.35); border-top-color: #fff; animation: rot .8s linear infinite; }
+@keyframes rot { to { transform: rotate(360deg); } }
+
+.msg { min-height: 20px; margin-top: 12px; text-align: center; font-size: 13px; color: var(--muted); transition: color .2s; }
+.msg.err { color: var(--err); }
+.msg.flash { animation: nudge .4s; }
+@keyframes nudge { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+
+/* ---------- result views ---------- */
+.result { text-align: center; padding: 18px 4px 6px; }
+.result[hidden], #uploader[hidden] { display: none; }
+.result .big {
+  width: 92px; height: 92px; margin: 0 auto 18px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff;
+  background: linear-gradient(135deg, #22c983, #12a8b7);
+  box-shadow: 0 18px 40px -14px #12b76a;
+  animation: burst .7s cubic-bezier(.2, .9, .3, 1.5) both;
+}
+.result.gone .big { background: linear-gradient(135deg, #8a90a8, #5d6380); box-shadow: 0 18px 40px -14px #5d6380; }
+.result .big svg { width: 46px; height: 46px; }
+.result .big path { stroke-dasharray: 40; stroke-dashoffset: 40; animation: draw .55s .35s ease-out forwards; }
+@keyframes burst { from { transform: scale(.3); opacity: 0; } }
+.result h2 { margin: 0 0 6px; font-size: 21px; animation: rise .5s .2s both; }
+.result p { margin: 0; color: var(--muted); font-size: 14px; animation: rise .5s .3s both; }
+.result ul { text-align: left; margin-top: 18px; animation: rise .5s .4s both; }
+.result li { display: flex; justify-content: space-between; gap: 10px; font-size: 13px; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--card-solid) 60%, transparent); margin-bottom: 6px; }
+.result li span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.result li span:last-child { color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+
+footer { text-align: center; color: var(--muted); font-size: 12px; margin-top: 18px; opacity: .8; }
+
+/* ---------- interactions (transform/opacity only for anything that loops) ---------- */
+#fluid { position: fixed; inset: 0; width: 100%; height: 100%; display: block; z-index: -2; pointer-events: none; }
+body.has-fluid .bg i { display: none; }
+body.has-fluid .bg::after { opacity: .45; }
+/* the fluid is already soft: skip the per-frame backdrop blur and use a denser card instead */
+body.has-fluid .card { -webkit-backdrop-filter: none; backdrop-filter: none; background: color-mix(in srgb, var(--card-solid) 80%, transparent); }
+
+/* static hairline highlight on the card edge */
+.card { position: relative; }
+.card > * { position: relative; z-index: 1; }
+.card::before {
+  content: ""; position: absolute; inset: -1px; padding: 1px; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(160deg, color-mix(in srgb, #fff 70%, transparent), transparent 35%, transparent 65%, color-mix(in srgb, var(--a2) 45%, transparent));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+@media (prefers-color-scheme: dark) {
+  .card::before { background: linear-gradient(160deg, rgba(255,255,255,.18), transparent 35%, transparent 65%, color-mix(in srgb, var(--a2) 35%, transparent)); }
+}
+
+/* one-shot light sweep on hover (pure transform) */
+.item::after, .btn.primary::after {
+  content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 60%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, var(--sweep), transparent);
+  transform: translateX(0) skewX(-12deg); opacity: 0;
+  transition: transform 0s .7s, opacity .7s var(--ease);
+}
+.item { --sweep: color-mix(in srgb, var(--a2) 16%, transparent); transition: transform .5s var(--ease), box-shadow .5s var(--ease), border-color .5s var(--ease); }
+.item > * { position: relative; z-index: 1; }
+.btn.primary { --sweep: rgba(255, 255, 255, .34); }
+.btn.primary > * { position: relative; }
+@media (hover: hover) {
+  .item:hover::after, .btn.primary:not(:disabled):hover::after { transform: translateX(270%) skewX(-12deg); opacity: 1; transition: transform 1s var(--ease), opacity .2s; }
+  .item:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--a1) 28%, transparent); box-shadow: 0 16px 32px -20px color-mix(in srgb, var(--a1) 70%, transparent); }
+  .item:hover .badge { transform: scale(1.06); }
+  .btn.primary:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 18px 36px -14px var(--a1); }
+  .btn.primary:not(:disabled):active { transform: scale(.97); }
+}
+.badge { transition: transform .5s var(--ease); }
+.x { transition: background .3s var(--ease), color .3s var(--ease), transform .45s var(--ease); }
+
+.ripple {
+  position: absolute; border-radius: 50%; pointer-events: none; transform: scale(0);
+  background: radial-gradient(circle, rgba(255, 255, 255, .45), rgba(255, 255, 255, 0) 70%);
+  animation: ripple .7s ease-out forwards;
+}
+.btn.ghost .ripple { background: radial-gradient(circle, color-mix(in srgb, currentColor 25%, transparent), transparent 70%); }
+@keyframes ripple { to { transform: scale(1); opacity: 0; } }
+
+.result li { transition: transform .5s cubic-bezier(.2, .8, .2, 1), background .5s; }
+.result li:hover { transform: translateX(3px); background: color-mix(in srgb, var(--a1) 8%, var(--card-solid)); }
+
+#confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
+
+@media (max-width: 420px) {
+  .card { padding: 22px 16px 18px; border-radius: 20px; }
+  .overall { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .stats { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+}
+</style>
+</head>
+<body>
+<canvas id="fluid" aria-hidden="true"></canvas>
+<div class="bg"><i></i><i></i><i></i></div>
+<canvas id="confetti"></canvas>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6d5efc"/><stop offset="1" stop-color="#2fb8ff"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<main>
+  <div class="card">
+    <header>
+      <div class="logo">
+        <svg viewBox="0 0 24 24" fill="#fff"><path d="M3.4 11.2 19.8 4.1c.8-.3 1.6.4 1.3 1.2L15 21.3c-.3.8-1.4.9-1.8.1l-2.6-5.2-5.3-2.7c-.8-.4-.7-1.5.1-1.8Zm7.6 4.6 1.7 3.4 4.6-12.4-6.3 9Zm-1.3-1.2 6.2-8.9-9.5 6.6 3.3 2.3Z"/></svg>
+      </div>
+      <div>
+        <h1>给我发文件</h1>
+        <p class="sub">一次性链接 · 上传完成后自动失效</p>
+      </div>
+    </header>
+
+    <section id="uploader">
+      <label class="drop" id="drop" tabindex="0">
+        <input type="file" id="pick" multiple>
+        <div class="drop-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 8.5a4 4 0 0 1-.5 9.5"/>
+            <g class="arrow"><path d="M12 12v8"/><path d="m8.5 15 3.5-3.5 3.5 3.5"/></g>
+          </svg>
+        </div>
+        <div class="drop-title">拖拽文件到这里，或<u>点击选择</u></div>
+        <div class="drop-sub">Drop files here, or click to browse</div>
+      </label>
+
+      <ul id="list"></ul>
+
+      <div class="overall" id="overall" hidden>
+        <div class="ring" id="ring">
+          <svg viewBox="0 0 84 84"><circle class="track" cx="42" cy="42" r="36"/><circle class="val" id="ringVal" cx="42" cy="42" r="36"/></svg>
+          <div class="pct" id="pct">0%</div>
+        </div>
+        <div class="stats">
+          <div><b id="stSent">0 B</b><span id="stTotal">已上传</span></div>
+          <div><b id="stSpeed">–</b><span>速度 / speed</span></div>
+          <div><b id="stFiles">0 / 0</b><span>文件 / files</span></div>
+          <div><b id="stEta">–</b><span>剩余 / left</span></div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button class="btn primary" id="go" disabled></button>
+        <button class="btn ghost" id="cancel" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>
+          取消
+        </button>
+      </div>
+      <div class="msg" id="msg"></div>
+    </section>
+
+    <section class="result" id="done" hidden>
+      <div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h2>上传完成，谢谢！</h2>
+      <p>文件已送达，此链接已失效。<br>All done, thank you! This link is now closed.</p>
+      <ul id="doneList"></ul>
+    </section>
+
+    <section class="result gone" id="gone" hidden>
+      <div class="big"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 7v6M12 17h.01"/></svg></div>
+      <h2>链接已失效</h2>
+      <p>此链接已被使用或已过期，请联系对方重新获取。<br>This link has been used or has expired.</p>
+    </section>
+  </div>
+  <footer>文件经 HTTPS 加密传输，仅发送给链接的创建者</footer>
+</main>
+
+<script>
+"use strict";
+const base = location.pathname.replace(/\/+$/, "");
+const KEY = "send-me-sid:" + base;
+const $ = (s) => document.querySelector(s);
+
+let CHUNK = 8 * 1024 * 1024;   // overridden by the server in /begin
+let PARALLEL = 4;
+// item: {fid, file, nChunks, done:Set<int>, sent, loaded:Map<int,int>, status: queued|uploading|done, el}
+let items = [];
+let sid = null, maxBytes = null;
+let phase = "idle";        // idle | uploading | paused | finishing | done | gone
+const active = new Set();  // in-flight XHRs
+let stop = null;           // first fatal error / cancellation; tells every worker to quit
+let speed = 0, lastT = 0, lastB = 0, paintPending = false;
+const canHash = !!(window.crypto && crypto.subtle && window.isSecureContext);
+
+class Gone extends Error {}
+class Cancelled extends Error {}
+
+const store = {
+  get: () => { try { return localStorage.getItem(KEY); } catch { return null; } },
+  set: (v) => { try { localStorage.setItem(KEY, v); } catch {} },
+  del: () => { try { localStorage.removeItem(KEY); } catch {} },
+};
+
+function fmt(n) {
+  const u = ["B", "KB", "MB", "GB", "TB"]; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i ? n.toFixed(n < 10 ? 2 : 1) : n) + " " + u[i];
+}
+function fmtTime(s) {
+  if (!isFinite(s) || s < 0) return "–";
+  if (s < 60) return Math.ceil(s) + " 秒";
+  if (s < 3600) return Math.floor(s / 60) + " 分 " + Math.round(s % 60) + " 秒";
+  return Math.floor(s / 3600) + " 时 " + Math.round((s % 3600) / 60) + " 分";
+}
+function msg(text, cls = "") {
+  const m = $("#msg"); m.textContent = text; m.className = "msg " + cls;
+  if (cls === "err") { void m.offsetWidth; m.classList.add("flash"); }
+}
+function hash(str) { let h = 2166136261; for (const c of str) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); }
+const fidOf = (f) => `${f.size.toString(36)}-${Math.floor(f.lastModified || 0).toString(36)}-${hash(f.name)}`;
+const chunkLen = (it, i) => Math.max(0, Math.min(CHUNK, it.file.size - i * CHUNK));
+const hex = (buf) => Array.from(new Uint8Array(buf), (b) => b.toString(16).padStart(2, "0")).join("");
+
+const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const ICON_TICK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+function makeEl(it) {
+  const li = document.createElement("li");
+  li.className = "item";
+  const dot = it.file.name.lastIndexOf(".");
+  const ext = dot > 0 ? it.file.name.slice(dot + 1, dot + 5) : "file";
+  let h = 0; for (const c of ext.toLowerCase()) h = (h * 31 + c.charCodeAt(0)) % 360;
+  li.innerHTML = `<div class="badge" style="--h:${h}"></div>
+    <div class="info"><div class="name"></div><div class="meta"><span class="size"></span><span class="state"></span></div><div class="bar"><i></i></div></div>
+    <div><button class="x" title="移除 / remove" aria-label="remove">${ICON_X}</button><div class="tick">${ICON_TICK}</div></div>`;
+  li.querySelector(".badge").textContent = ext;
+  li.querySelector(".name").textContent = it.file.name;
+  li.querySelector(".name").title = it.file.name;
+  li.querySelector(".size").textContent = fmt(it.file.size);
+  li.querySelector(".x").onclick = (e) => { e.preventDefault(); removeItem(it); };
+  it.el = li;
+  paintItem(it);
+  return li;
+}
+
+function itemBytes(it) {
+  let b = it.sent;
+  for (const v of it.loaded.values()) b += v;
+  return Math.min(b, it.file.size);
+}
+
+function paintItem(it) {
+  const size = it.file.size;
+  const pct = size ? itemBytes(it) / size * 100 : (it.status === "done" ? 100 : 0);
+  it.el.querySelector(".bar i").style.width = pct + "%";
+  const st = it.el.querySelector(".state");
+  if (it.status === "done") st.textContent = "完成";
+  else if (it.status === "uploading") st.textContent = pct.toFixed(0) + "%";
+  else st.textContent = it.sent > 0 ? `已暂停 ${pct.toFixed(0)}%` : "";
+}
+
+function schedulePaint() {
+  if (paintPending) return;
+  paintPending = true;
+  requestAnimationFrame(() => {
+    paintPending = false;
+    for (const it of items) if (it.status === "uploading") paintItem(it);
+    paintOverall();
+  });
+}
+
+function addFiles(list) {
+  if (phase !== "idle" && phase !== "paused") return;
+  let added = 0;
+  for (const f of list) {
+    const fid = fidOf(f);
+    if (items.some((it) => it.fid === fid)) continue;
+    const it = { fid, file: f, nChunks: 0, done: new Set(), sent: 0, loaded: new Map(), status: "queued", el: null };
+    items.push(it);
+    $("#list").appendChild(makeEl(it));
+    added++;
+  }
+  if (!added && list.length) msg("文件已在列表中 / already added");
+  else update();
+}
+
+function removeItem(it) {
+  if (phase !== "idle" && phase !== "paused") return;
+  items = items.filter((x) => x !== it);
+  it.el.classList.add("leaving");
+  setTimeout(() => it.el.remove(), 320);
+  update();
+}
+
+function totals() {
+  let total = 0, sent = 0, done = 0;
+  for (const it of items) { total += it.file.size; sent += itemBytes(it); if (it.status === "done") done++; }
+  return { total, sent, done };
+}
+
+function paintOverall() {
+  const { total, sent: s, done } = totals();
+  const pct = total ? s / total * 100 : (done === items.length && items.length ? 100 : 0);
+  $("#ringVal").style.strokeDashoffset = 226.2 * (1 - pct / 100);
+  $("#pct").textContent = Math.floor(pct) + "%";
+  $("#stSent").textContent = fmt(s);
+  $("#stTotal").textContent = `已上传 / 共 ${fmt(total)}`;
+  $("#stFiles").textContent = `${done} / ${items.length}`;
+  if (phase === "uploading") {
+    const now = performance.now();
+    if (!lastT) { lastT = now; lastB = s; }
+    else if (now - lastT > 500) {
+      const inst = Math.max(0, (s - lastB) / ((now - lastT) / 1000));
+      speed = speed ? speed * 0.75 + inst * 0.25 : inst;
+      lastT = now; lastB = s;
+    }
+    $("#stSpeed").textContent = speed > 0 ? fmt(speed) + "/s" : "–";
+    $("#stEta").textContent = speed > 0 ? fmtTime((total - s) / speed) : "–";
+  } else {
+    $("#stSpeed").textContent = "–"; $("#stEta").textContent = phase === "paused" ? "已暂停" : "–";
+  }
+}
+
+function update() {
+  const { total } = totals();
+  const busy = phase === "uploading" || phase === "finishing";
+  const go = $("#go"), cancel = $("#cancel"), drop = $("#drop");
+  drop.classList.toggle("compact", items.length > 0);
+  drop.classList.toggle("disabled", busy);
+  $("#list").classList.toggle("locked", busy);
+  cancel.hidden = phase !== "uploading";
+  $("#overall").hidden = !(busy || phase === "paused");
+  $("#ring").classList.toggle("running", phase === "uploading");
+  $("#ring").classList.toggle("paused", phase === "paused");
+
+  if (phase === "uploading") { go.disabled = true; go.innerHTML = '<span class="spinner"></span>上传中…'; }
+  else if (phase === "finishing") { go.disabled = true; go.innerHTML = '<span class="spinner"></span>正在完成…'; }
+  else {
+    go.disabled = !items.length;
+    go.textContent = phase === "paused" && items.some((it) => it.sent > 0 && it.status !== "done") ? "继续上传 · Resume" : "开始上传 · Upload";
+  }
+  if (phase === "idle") msg(items.length ? `${items.length} 个文件，共 ${fmt(total)}` : "");
+  paintOverall();
+}
+
+function post(url, body, onProgress) {
+  return new Promise((resolve) => {
+    const x = new XMLHttpRequest();
+    active.add(x);
+    x.open("POST", url);
+    x.timeout = 10 * 60 * 1000;
+    if (onProgress) x.upload.onprogress = (e) => onProgress(e.loaded);
+    x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch {} resolve({ status: x.status, body: j }); };
+    x.onerror = x.ontimeout = () => resolve({ status: 0, body: {} });
+    x.onabort = () => resolve({ status: -1, body: {} });
+    x.send(body);
+  }).finally(function () { for (const x of active) if (x.readyState === 4) active.delete(x); });
+}
+
+function halt(err) {            // first error wins; abort everything in flight
+  if (!stop) stop = err;
+  for (const x of active) x.abort();
+  active.clear();
+}
+
+async function wait(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (stop) throw stop; await new Promise((r) => setTimeout(r, 150)); }
+}
+
+function markDone(it) {
+  it.status = "done";
+  it.el.classList.remove("active");
+  it.el.classList.add("done");
+  paintItem(it);
+}
+
+async function sendChunk(it, i) {
+  const off = i * CHUNK, len = chunkLen(it, i);
+  if (it.status === "queued") { it.status = "uploading"; it.el.classList.add("active"); }
+  const blob = it.file.slice(off, off + len);
+  let body = blob, sha = "";
+  if (canHash) {                 // end-to-end integrity: server verifies every chunk
+    body = await blob.arrayBuffer();
+    sha = hex(await crypto.subtle.digest("SHA-256", body));
+  }
+  let tries = 0;
+  while (true) {
+    if (stop) throw stop;
+    const q = `sid=${encodeURIComponent(sid)}&fid=${it.fid}&index=${i}&size=${it.file.size}` +
+      `&name=${encodeURIComponent(it.file.name)}&total=${totals().total}&count=${items.length}` + (sha ? `&sha=${sha}` : "");
+    it.loaded.set(i, 0);
+    const r = await post(`${base}/chunk?${q}`, body, (l) => { it.loaded.set(i, Math.min(l, len)); schedulePaint(); });
+    it.loaded.delete(i);
+    if (r.status === -1) throw stop || new Cancelled();
+    if (r.status === 200) {
+      if (!it.done.has(i)) { it.done.add(i); it.sent += len; }
+      if (it.done.size === it.nChunks) markDone(it);
+      schedulePaint();
+      return;
+    }
+    if (r.status === 410 || r.status === 404) throw new Gone();
+    if (r.status === 413) throw new Error(r.body.error === "total size limit exceeded" ? "超过总大小上限" : (r.body.error || "too large"));
+    if (r.status === 400) throw new Error("请求无效 / bad request");
+    // 409 (same chunk still streaming from an earlier attempt), 422 (checksum mismatch), 5xx, network: retry
+    if (++tries > 10) throw new Error("网络错误 / network error");
+    if (r.status !== 409) msg(`网络不稳定，正在重试… / retrying (${tries})`);
+    await wait(Math.min(30000, 800 * 2 ** Math.min(tries, 6)) * (0.5 + Math.random()));
+  }
+}
+
+async function syncWithServer() {
+  // Ask which chunks the server already has (also from earlier links): this is what makes
+  // resuming work after a page reload, a dropped connection, or a restarted server.
+  const pending = items.filter((it) => it.status !== "done");
+  for (const it of pending) it.nChunks = Math.max(1, Math.ceil(it.file.size / CHUNK));
+  if (!pending.length) return;
+  const r = await post(`${base}/status?sid=${encodeURIComponent(sid)}`, JSON.stringify({ fids: pending.map((it) => it.fid) }));
+  if (r.status === -1) throw stop || new Cancelled();
+  if (r.status === 410 || r.status === 404) throw new Gone();
+  if (r.status !== 200) return;  // not fatal: we just re-send everything
+  let resumed = 0;
+  for (const it of pending) {
+    const have = r.body.files?.[it.fid];
+    if (!have) continue;
+    it.done = new Set(have.filter((i) => i >= 0 && i < it.nChunks));
+    it.sent = [...it.done].reduce((a, i) => a + chunkLen(it, i), 0);
+    if (it.sent > 0) resumed += it.sent;
+    if (it.done.size === it.nChunks) markDone(it); else paintItem(it);
+  }
+  if (resumed) msg(`已从断点继续，跳过 ${fmt(resumed)} / resuming, ${fmt(resumed)} already uploaded`);
+}
+
+async function upload() {
+  if (!items.length || phase === "uploading" || phase === "finishing") return;
+  phase = "uploading"; stop = null; speed = 0; lastT = 0;
+  update(); msg("");
+  try {
+    if (!sid) {
+      const b = await post(`${base}/begin`, JSON.stringify({ sid: store.get() }));
+      if (b.status === -1) throw stop || new Cancelled();
+      if (b.status !== 200) throw new Gone();
+      sid = b.body.sid; maxBytes = b.body.maxBytes; store.set(sid);
+      if (b.body.chunkSize) CHUNK = b.body.chunkSize;
+      if (b.body.parallel) PARALLEL = b.body.parallel;
+    }
+    const { total } = totals();
+    if (maxBytes && total > maxBytes) throw new Error(`总大小超过上限（${fmt(maxBytes)}）`);
+
+    await syncWithServer();
+    paintOverall();
+
+    // Work queue of every missing chunk, in file order; N workers drain it concurrently.
+    const queue = [];
+    for (const it of items) {
+      if (it.status === "done") continue;
+      for (let i = 0; i < it.nChunks; i++) if (!it.done.has(i)) queue.push([it, i]);
+    }
+    const worker = async () => {
+      while (queue.length && !stop) {
+        const [it, i] = queue.shift();
+        try { await sendChunk(it, i); } catch (e) { halt(e); throw e; }
+      }
+    };
+    const results = await Promise.allSettled(Array.from({ length: Math.min(PARALLEL, queue.length) }, worker));
+    if (stop) throw stop;
+    const failed = results.find((r) => r.status === "rejected");
+    if (failed) throw failed.reason;
+
+    phase = "finishing"; update();
+    let f;
+    for (let i = 0; i < 8; i++) {
+      f = await post(`${base}/finish?sid=${encodeURIComponent(sid)}`, JSON.stringify({ fids: items.map((it) => it.fid) }));
+      if (f.status !== 0 && f.status !== 409) break;
+      await new Promise((r) => setTimeout(r, 1000 + 500 * i));
+    }
+    if (f.status === 410 || f.status === 404) throw new Gone();
+    if (f.status !== 200) throw new Error("服务器未确认完成 / server did not confirm");
+    store.del();
+    showDone(f.body.files || []);
+  } catch (e) {
+    halt(e);
+    for (const it of items) {
+      it.loaded.clear();
+      if (it.status === "uploading") { it.status = "queued"; it.el.classList.remove("active"); }
+      paintItem(it);
+    }
+    if (e instanceof Gone) return showGone();
+    phase = "paused"; update();
+    if (e instanceof Cancelled) msg("已取消。已传的部分会保留，可以继续上传或移除文件。 / Cancelled — resume or remove files.");
+    else msg("上传失败：" + e.message + "。点击“继续上传”会从断点继续。", "err");
+  }
+}
+
+function cancelUpload() {
+  if (phase !== "uploading") return;
+  halt(new Cancelled());
+}
+
+function swap(show) {
+  const up = $("#uploader");
+  up.style.transition = "opacity .25s, transform .25s";
+  up.style.opacity = "0"; up.style.transform = "scale(.97)";
+  setTimeout(() => { up.hidden = true; show.hidden = false; }, 250);
+}
+
+function showDone(files) {
+  phase = "done";
+  const ul = $("#doneList");
+  for (const f of files) {
+    const li = document.createElement("li");
+    const a = document.createElement("span"); a.textContent = f.name;
+    const b = document.createElement("span"); b.textContent = fmt(f.size);
+    li.append(a, b); ul.appendChild(li);
+  }
+  swap($("#done"));
+  setTimeout(confetti, 300);
+}
+function showGone() {
+  phase = "gone"; store.del();
+  swap($("#gone"));
+}
+
+/* ---------- confetti ---------- */
+function confetti() {
+  if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const c = $("#confetti"), ctx = c.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  c.width = innerWidth * dpr; c.height = innerHeight * dpr; ctx.scale(dpr, dpr);
+  const colors = ["#6d5efc", "#2fb8ff", "#ff5fa2", "#12b76a", "#ffc53d", "#ffffff"];
+  const parts = [];
+  const burst = (x, y, n, dir) => {
+    for (let i = 0; i < n; i++) {
+      const a = dir + (Math.random() - .5) * 1.1, v = 9 + Math.random() * 11;
+      parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: 6 + Math.random() * 6, h: 3 + Math.random() * 5,
+        r: Math.random() * 6.28, vr: (Math.random() - .5) * .35, c: colors[(Math.random() * colors.length) | 0], life: 0, shape: Math.random() < .3 });
+    }
+  };
+  burst(0, innerHeight * .75, 90, -Math.PI / 3);
+  burst(innerWidth, innerHeight * .75, 90, -Math.PI * 2 / 3);
+  burst(innerWidth / 2, innerHeight * .35, 60, -Math.PI / 2);
+  let frame = 0;
+  (function tick() {
+    ctx.clearRect(0, 0, innerWidth, innerHeight);
+    let alive = 0;
+    for (const p of parts) {
+      p.life++; p.vy += .32; p.vx *= .985; p.vy *= .985; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+      if (p.y > innerHeight + 30) continue;
+      alive++;
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+      ctx.globalAlpha = Math.max(0, 1 - p.life / 220);
+      ctx.fillStyle = p.c;
+      if (p.shape) { ctx.beginPath(); ctx.arc(0, 0, p.h / 1.4, 0, 6.28); ctx.fill(); }
+      else ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h * Math.abs(Math.cos(p.life / 6 + p.r)));
+      ctx.restore();
+    }
+    if (alive && ++frame < 400) requestAnimationFrame(tick);
+    else ctx.clearRect(0, 0, innerWidth, innerHeight);
+  })();
+}
+
+/* ---------- wiring ---------- */
+$("#pick").onchange = (e) => { addFiles(e.target.files); e.target.value = ""; };
+const drop = $("#drop");
+let depth = 0;
+const canDrop = () => phase === "idle" || phase === "paused";
+window.addEventListener("dragenter", (e) => { e.preventDefault(); if (canDrop() && ++depth === 1) drop.classList.add("over"); });
+window.addEventListener("dragleave", (e) => { e.preventDefault(); if (--depth <= 0) { depth = 0; drop.classList.remove("over"); } });
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => { e.preventDefault(); depth = 0; drop.classList.remove("over"); if (canDrop() && e.dataTransfer?.files?.length) addFiles(e.dataTransfer.files); });
+drop.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("#pick").click(); } });
+$("#go").onclick = upload;
+$("#cancel").onclick = cancelUpload;
+window.addEventListener("beforeunload", (e) => { if (phase === "uploading" || phase === "finishing") { e.preventDefault(); e.returnValue = ""; } });
+
+/* ---------- ripple ---------- */
+document.addEventListener("pointerdown", (e) => {
+  const b = e.target.closest(".btn");
+  if (!b || b.disabled) return;
+  const r = b.getBoundingClientRect(), d = Math.max(r.width, r.height) * 2.2;
+  const s = document.createElement("span");
+  s.className = "ripple";
+  s.style.cssText = `width:${d}px;height:${d}px;left:${e.clientX - r.left - d / 2}px;top:${e.clientY - r.top - d / 2}px`;
+  b.appendChild(s);
+  setTimeout(() => s.remove(), 750);
+});
+
+/* ---------- fluid background (WebGL) ---------- */
+(function fluid() {
+  const canvas = $("#fluid");
+  const gl = canvas.getContext("webgl", { antialias: false, alpha: false, depth: false, powerPreference: "low-power" });
+  if (!gl) { canvas.remove(); return; }
+  const VS = "attribute vec2 p;void main(){gl_Position=vec4(p,0.,1.);}";
+  const FS = `#ifdef GL_FRAGMENT_PRECISION_HIGH
+precision highp float;
+#else
+precision mediump float;
+#endif
+uniform vec2 R; uniform float T; uniform vec2 M; uniform vec2 V; uniform float E; uniform float D;
+float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float n(vec2 p){vec2 i=floor(p),f=fract(p);vec2 u=f*f*(3.-2.*f);
+  return mix(mix(h(i),h(i+vec2(1,0)),u.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),u.x),u.y);}
+float fbm(vec2 p){float s=0.,a=.55;for(int i=0;i<4;i++){s+=a*n(p);p=mat2(1.6,1.2,-1.2,1.6)*p+vec2(1.7,9.2);a*=.42;}return s;}
+void main(){
+  float asp=R.x/R.y;
+  vec2 p=gl_FragCoord.xy/R; p.x*=asp;
+  vec2 m=M; m.x*=asp;
+  vec2 d=p-m; float r2=dot(d,d);
+  float inf=exp(-r2*7.);
+  p-=V*inf*.55;                                  /* drag the fluid along with the cursor */
+  float a=inf*E*1.6; float c=cos(a), s=sin(a);   /* swirl that decays with cursor energy */
+  p=m+mat2(c,-s,s,c)*(p-m);
+  float t=T*.035;
+  vec2 P=p*.8;
+  vec2 w=vec2(fbm(P+vec2(0.,t)),fbm(P+vec2(5.2,1.3)-t*.8));
+  float f=fbm(P+2.2*w+vec2(t*.6,0.));
+  vec3 c1=vec3(.43,.37,.99), c2=vec3(.18,.72,1.), c3=vec3(1.,.37,.64);
+  vec3 col=mix(c1,c2,smoothstep(.2,.8,f));
+  col=mix(col,c3,smoothstep(.6,1.05,length(w))*.5);
+  col+=inf*E*.25*vec3(.6,.8,1.);
+  vec3 base=mix(vec3(.955,.96,.985),vec3(.03,.035,.07),D);
+  float k=mix(.38,.34,D)+.08*f;
+  gl_FragColor=vec4(mix(base,col,k),1.);
+}`;
+  const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return gl.getShaderParameter(o, gl.COMPILE_STATUS) ? o : null; };
+  const vs = sh(gl.VERTEX_SHADER, VS), fs = sh(gl.FRAGMENT_SHADER, FS);
+  if (!vs || !fs) { canvas.remove(); return; }
+  const prog = gl.createProgram();
+  gl.attachShader(prog, vs); gl.attachShader(prog, fs); gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) { canvas.remove(); return; }
+  gl.useProgram(prog);
+  gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
+  const loc = gl.getAttribLocation(prog, "p");
+  gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
+  const U = {}; for (const k of ["R", "T", "M", "V", "E", "D"]) U[k] = gl.getUniformLocation(prog, k);
+  document.body.classList.add("has-fluid");
+
+  const SCALE = 0.28;  // render at low res; the browser's upscale keeps it soft
+  const resize = () => {
+    canvas.width = Math.max(2, Math.round(innerWidth * SCALE));
+    canvas.height = Math.max(2, Math.round(innerHeight * SCALE));
+    gl.viewport(0, 0, canvas.width, canvas.height);
+  };
+  resize(); addEventListener("resize", resize);
+
+  const darkQ = matchMedia("(prefers-color-scheme: dark)");
+  const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let tx = 0.5, ty = 0.5, mx = 0.5, my = 0.5, vx = 0, vy = 0, energy = 0, dark = darkQ.matches ? 1 : 0;
+  addEventListener("pointermove", (e) => { tx = e.clientX / innerWidth; ty = 1 - e.clientY / innerHeight; }, { passive: true });
+
+  const t0 = performance.now(); let last = t0, running = true;
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000); last = now;
+    const k = 1 - Math.pow(0.0009, dt);                 // frame-rate independent easing
+    const px = mx, py = my;
+    mx += (tx - mx) * k; my += (ty - my) * k;
+    const ivx = (mx - px) / Math.max(dt, 1e-3), ivy = (my - py) / Math.max(dt, 1e-3);
+    vx += (ivx * 0.08 - vx) * Math.min(1, dt * 4); vy += (ivy * 0.08 - vy) * Math.min(1, dt * 4);
+    energy += (Math.min(1, Math.hypot(ivx, ivy) * 0.6) - energy) * Math.min(1, dt * (energy > 0.01 ? 1.2 : 3));
+    dark += ((darkQ.matches ? 1 : 0) - dark) * Math.min(1, dt * 3);
+    gl.uniform2f(U.R, canvas.width, canvas.height);
+    gl.uniform1f(U.T, (now - t0) / 1000);
+    gl.uniform2f(U.M, mx, my);
+    gl.uniform2f(U.V, vx, vy);
+    gl.uniform1f(U.E, energy);
+    gl.uniform1f(U.D, dark);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    if (running && !still) requestAnimationFrame(frame);
+  }
+  document.addEventListener("visibilitychange", () => {
+    running = !document.hidden;
+    if (running && !still) { last = performance.now(); requestAnimationFrame(frame); }
+  });
+  requestAnimationFrame(frame);
+})();
+
+update();
+</script>
+</body>
+</html>
